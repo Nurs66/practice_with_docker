@@ -1,0 +1,59 @@
+FROM python:3.8.3-alpine as builder 
+
+WORKDIR /usr/src/dj_app/
+
+ENV PYTHONDONWRITEBYTECODE 1
+ENV PYTHONUNFERRED 1
+
+RUN apk update \
+    && apk add postgresql-dev gcc python3-dev musl-dev
+
+
+RUN pip install --upgrade pip
+RUN pip install flake8
+
+COPY . .
+RUN flake8 --ignore=E501,F401 .
+
+COPY ./requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /usr/src/dj_app/wheels -r requirements.txt
+
+
+FROM python:3.8.3-alpine
+
+RUN mkdir -p /home/dj_app
+
+RUN addgroup -S dj_app && adduser -S dj_app -G dj_app
+
+ENV HOME=/home/dj_app
+ENV APP_HOME=/home/dj_app/web
+RUN mkdir $APP_HOME
+WORKDIR $APP_HOME
+
+RUN apk update && apk add libpq
+COPY --from=builder /usr/src/dj_app/wheels /wheels
+COPY --from=builder /usr/src/dj_app/requirements.txt .
+RUN pip install --no-cache /wheels/*
+
+COPY ./entrypoint.prod.sh $APP_HOME
+
+COPY . $APP_HOME
+
+RUN chown -R dj_app:dj_app $APP_HOME
+
+USER dj_app
+
+ENTRYPOINT [ "/home/dj_app/web/entrypoint.prod.sh" ]
+
+
+
+
+
+
+
+
+
+
+
+
+
